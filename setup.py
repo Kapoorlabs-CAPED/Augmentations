@@ -29,6 +29,7 @@ setup(
         "sklearn",
         "dask",
         "natsort",
+        "photutils",
        
     ],
     packages=setuptools.find_packages(),
