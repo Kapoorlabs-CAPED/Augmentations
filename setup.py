@@ -11,7 +11,7 @@ with open(path.join(_dir,'oneat_augmentations','_version.py'), encoding="utf-8")
     exec(f.read())
 
 setup(
-    name="oneat-augmentations",
+    name="oneat_augmentations",
 
     version=__version__,
 
