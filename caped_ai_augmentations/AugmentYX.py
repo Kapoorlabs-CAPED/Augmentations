@@ -6,6 +6,7 @@ Created on Sat Dec 19 19:09:26 2020
 @author: kapoorlab
 """
 
+from ast import For
 import numpy as np
 import math
 import random
@@ -103,7 +104,7 @@ class Augmentation2D(object):
         self.data_shape = data.shape
         self.data_size = self.data_shape[0]
         self.idx_list = None
-
+        
         parse_dict = {}
         callback = None
         callback_poisson = None
