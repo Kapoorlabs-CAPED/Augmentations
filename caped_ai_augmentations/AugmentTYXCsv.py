@@ -12,7 +12,7 @@ from albumentations import transforms
 from scipy import ndimage
 import pandas as pd
 from photutils.datasets import make_noise_image
-class TemporalAug(object):
+class AugmentTYXCsv(object):
 
 
 

@@ -13,7 +13,7 @@ from scipy import ndimage
 from photutils.datasets import make_noise_image
 
 
-class Augmentation2DC(object):
+class AugmentYXC(object):
 
 
 

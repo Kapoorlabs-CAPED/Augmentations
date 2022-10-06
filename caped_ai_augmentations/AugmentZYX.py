@@ -17,7 +17,7 @@ from scipy.ndimage import rotate
 from .utils import image_pixel_duplicator, image_embedding, poisson_noise     
     
     
-class Augmentation3D(object):
+class AugmentZYX(object):
 
 
 
