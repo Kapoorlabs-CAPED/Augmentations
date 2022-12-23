@@ -5,6 +5,8 @@ Summary: Augmentations for volume, planar segmentation, classification image seg
 Home-page: https://github.com/Kapoorlabs-CAPED/Augmentations/
 Author: Varun Kapoor
 Author-email: randomaccessiblekapoor@gmail.com
+License: UNKNOWN
+Platform: UNKNOWN
 Classifier: Development Status :: 3 - Alpha
 Classifier: Natural Language :: English
 Classifier: License :: OSI Approved :: MIT License
@@ -16,3 +18,5 @@ License-File: LICENSE
 
 # Augmentations
 Slim augmentation library built on top of albumentations
+
+

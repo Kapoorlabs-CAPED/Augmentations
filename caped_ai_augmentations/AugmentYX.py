@@ -1,327 +1,324 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Dec 19 19:09:26 2020
+Created on Wed August 17 12:57:26 2022
 
 @author: kapoorlab
 """
 
-from ast import For
 import numpy as np
-import math
-import random
-from scipy.ndimage import shift, zoom
-from scipy.ndimage import rotate
+from albumentations.augmentations.geometric.transforms import ElasticTransform
+from albumentations import transforms    
+from scipy import ndimage
+from photutils.datasets import make_noise_image
 
-from .utils import image_pixel_duplicator, image_embedding, poisson_noise    
-    
-    
+
 class AugmentYX(object):
 
 
 
     """
-    Data generator of 2D voxel data.
-    This generator is for data augmentation(flip, shift...).
+    Augmentation creator for a TYX shape input image and labelimages
     Note:
-        Only one type of augmentation can be applied for one generator.
+        Only one type of augmentation can be applied for one creator.
     """
     def __init__(self,
-                 flip_axis=None,
-                 shift_axis=None,
-                 shift_range=None,
-                 zoom_axis=None,
-                 zoom_range=None,
-                 rotate_axis=None,
                  rotate_angle=None, 
-                 size = None,
-                 size_zero = None,
-                 mu = None,
+                 vertical_flip = None,
+                 horizontal_flip = None,
+                 alpha= 1,
+                 alpha_affine=None,
+                 mean = 0,
+                 sigma = 5,
+                 distribution = None,
+                 brightness_limit=None,
+                 contrast_limit=None,
+                 brightness_by_max=True,
+                 always_apply=True,
+                 prob_bright_contrast=0.5,
+                 multiplier= None,
                  ):
         """
         Arguments:
-         flip_axis: int(1, 2 ) or 'random'
-                Integers 1, 2 mean x axis, y axis for each.
-                Axis along which data is flipped.
-         shift_axis: int(1, 2 ) or 'random'
-                Integers 1, 2 mean x axis, y axis for each.
-                Axis along which data is shifted.
-         shift_range: float([-1, 1]) or 'random'
-                Rate with which data is shifted along the specified axis.
-                Positive value means data is shifted towards the positive direction.
-                Negative value means the negative direction as well.
-         zoom_axis: int(1, 2 ), 'random' or 'same'.
-                Integers 1, 2 mean x axis, y axis for each.
-                Axis along which data is zoomed. 'same' means the same zoom_range is applied for all axis
-         zoom_range: float(>= 0) or 'random'
-                Magnification with which data is zoomed along the specified axis.
-                Value more than 1 means data is expanded and value less than means data is shrunk.
-         rotate_axis: int(1, 2 ) or 'random'
-                Integers 1, 2  mean x axis, y axis for each.
-                Axis along which data is rotated.
-         rotate_angle: int or 'random'
-                Angle by which data is rotated along the specified axis.
+         
+        
+        rotate_angle: int or 'random'
+                Angle by which image is rotated using the affine transformation matrix.
+        alpha: (float) for elastic deformation
+        alpha_affine (float): The range will be (-alpha_affine, alpha_affine)         
+        mean: float
+                Mean of the distribution used for adding noise to the image
+        sigma  : float
+                Standard Deviation of the distribution used for adding noise to the image and also filter for gauss kernel in elastic transform      
+        distribution : "Gaussian", "Poisson", "Both"
+                The tuple or a single string name for the distribution to add noise          
+        brightness_limit ((float, float) or float): factor range for changing brightness.
+            If limit is a single float, the range will be (-limit, limit). Default: (-0.2, 0.2).
+        contrast_limit ((float, float) or float): factor range for changing contrast.
+            If limit is a single float, the range will be (-limit, limit). Default: (-0.2, 0.2).
+        brightness_by_max (Boolean): If True adjust contrast by image dtype maximum,
+            else adjust contrast by image mean.
+        prob_bright_contrast (float): probability of applying the transform. Default: 0.5.   
+        multiplier (float): multiplier tuple for applying multiplicative image noise    
         """
-        self.flip_axis = flip_axis
-        self.shift_axis = shift_axis
-        self.shift_range = shift_range
-        self.zoom_axis = zoom_axis
-        self.zoom_range = zoom_range
-        self.rotate_axis = rotate_axis
+       
+        self.alpha = alpha 
+        self.alpha_affine = alpha_affine
         self.rotate_angle = rotate_angle
-        self.size = size
-        self.size_zero = size_zero
-        self.mu = mu
-
+        self.mean = mean 
+        self.sigma = sigma
+        self.vertical_flip = vertical_flip
+        self.horizontal_flip = horizontal_flip
+        self.distribution = distribution
+        self.brightness_limit = brightness_limit
+        self.contrast_limit = contrast_limit
+        self.brightness_by_max = brightness_by_max 
+        self.always_apply = always_apply
+        self.prob_bright_contrast = prob_bright_contrast
+        self.multiplier = multiplier
+    
     def build(self,
-              data=None,
-              label=None,
-              batch_size=None):
+              image=None,
+              labelimage=None
+              ):
         """
         Arguments:
-        build generator to augment input data according to initialization
-        data: array
-            Input data to be augmented.
-            The shape of input data should have 3 dimension(batch, x, y).
-        label : Integer label images
-            The shape of this labels should match the shape of data (batch, x, y).
-        batch_size: int
-            The size of data to generate at one batch.
+        build augmentor to augment input image according to initialization
+        image : array
+            Input image to be augmented.
+            The shape of input image should have 2 dimension(y, x).
+        labelimage : Integer labelimage images
+            The shape of this labelimages should match the shape of image (y, x).
+        labelcsv : oneat compatiable csv file of class and event lcoations.
+            The oneat training datamaker writes T,Y,X of the selected event locations    
+  
         Return:
-            generator
+            augmentor
         """
-        if data.ndim != 3:
-            raise ValueError('Input data should have 3 dimensions.')
-
+        if image.ndim != 2:
+            raise ValueError('Input image should have 2 dimensions.')
        
-        if data.ndim != label.ndim:
-                raise ValueError('Input data and label size do not much.')
+        if image.ndim != labelimage.ndim:
+                raise ValueError('Input image and labelimage size do not much.')
 
-        self.data = data
-        self.label = label
-        self.batch_size = batch_size
-        self.data_dim = data.ndim
-        self.data_shape = data.shape
-        self.data_size = self.data_shape[0]
-        self.idx_list = None
-        
+        self.image = image
+        self.labelimage = labelimage
+      
+        self.image_dim = image.ndim
+        self.image_shape = image.shape
+       
+
         parse_dict = {}
-        callback = None
-        callback_poisson = None
-        #pixel_duplicator
-        if self.size is not None:
-            callback = self._duplicate_data
-            parse_dict['size'] = self.size  
-        #pixel_embedder
-        if self.size_zero is not None:
-            callback = self._embed_data
-            parse_dict['size_zero'] = self.size_zero   
-
-        #poisson_noise
-        if self.mu is not None:
-            callback_poisson = self._noise_data
-            parse_dict['mu'] = self.mu
+        callback_geometric = None
+        callback_intensity = None
 
 
-        # flip
-        if self.flip_axis is not None:
-            callback = self._flip_data
-            if self.flip_axis in (1, 2):
-                parse_dict['flip_axis'] = self.flip_axis
-            elif self.flip_axis == 'random':
-                parse_dict['flip_axis'] = random.randint(1, 2)
-            else:
-                raise ValueError('Flip axis should be 1, 2 or random')
+        #Vertical flip
+        if (self.vertical_flip is not None):
+            callback_geometric = self._vertical_flip 
+            parse_dict['vertical_flip'] = True
 
-        # shift
-        if (self.shift_axis is not None) and (self.shift_range is not None):
-            callback = self._shift_data
-            if self.shift_axis in (1, 2):
-                parse_dict['shift_axis'] = self.shift_axis
-            elif self.shift_axis == 'random':
-                parse_dict['shift_axis'] = random.randint(1, 2)
-            else:
-                raise ValueError('Shift axis should be 1, 2 or random')
 
-            if not (type(self.shift_range) is str) and abs(self.shift_range) <= 1:
-                parse_dict['shift_range'] = self.shift_range
-            elif self.shift_range == 'random':
-                parse_dict['shift_range'] = np.random.rand() - 0.5
-            else:
-                raise ValueError('Shift range should be in range [-1, 1] or random')
+        #Horizontal flip
+        if (self.horizontal_flip is not None):
+             callback_geometric = self._horizontal_flip
+             parse_dict['horizontal_flip'] = True
+   
 
-        # zoom
-        if(self.zoom_axis is not None) and (self.zoom_range is not None):
-            callback = self._zoom_data
-            if self.zoom_axis in (1, 2):
-                parse_dict['zoom_axis'] = self.zoom_axis
-            elif self.zoom_axis == 'random':
-                parse_dict['zoom_axis'] = random.randint(1, 2)
-            elif self.zoom_axis == 'same':
-                parse_dict['zoom_axis'] = None
-            else:
-                raise ValueError('Zoom axis should be 1, 2 or random')
-
-            if not (type(self.zoom_range) is str) and (type(self.zoom_range) in (int, float)):
-                parse_dict['zoom_range'] = self.zoom_range
-            elif self.zoom_range == 'random':
-                parse_dict['zoom_range'] = np.random.uniform(0.25, 1) * 2
-            else:
-                raise ValueError('Zoom range should be type of int, float or random')
+        # elastic deformation
+        if (self.alpha_affine is not None):
+             callback_geometric = self._elastic_deform_image
+             parse_dict['alpha'] = self.alpha       
+             parse_dict['sigma'] = self.sigma
+             parse_dict['alpha_affine'] = self.alpha_affine
 
         # rotate
-        if (self.rotate_axis is not None) and (self.rotate_angle is not None):
-            callback = self._rotate_data
-            if self.rotate_axis in (1, 2):
-                parse_dict['rotate_axis'] = self.rotate_axis
-            elif self.rotate_axis == 'random':
-                parse_dict['rotate_axis'] = random.randint(1, 2)
-            else:
-                raise ValueError('Rotate axis should be 1, 2 or random')
+        if  (self.rotate_angle is not None):
+            callback_geometric = self._rotate_image
 
             if self.rotate_angle == 'random':
-                parse_dict['rotate_angle'] = int(np.random.uniform(-180, 180))
+                parse_dict['rotate_angle'] = np.radians(int(np.random.uniform(-180, 180)))
             elif type(self.rotate_angle) == int:
-                parse_dict['rotate_angle'] = self.rotate_angle
+                parse_dict['rotate_angle'] = np.radians(self.rotate_angle)
             else:
                 raise ValueError('Rotate angle should be int or random')
 
-        # build and return generator with specified callback function
-        if callback:
-            return self._return_generator(callback, parse_dict)
-        if callback_poisson:
-             return self._return_generator_poisson(callback_poisson, parse_dict)   
+        # add additive noise
+        if (self.distribution is not None):
+
+            callback_intensity = self._noise_image  
+            if self.distribution == 'Gaussian':
+                parse_dict['distribution'] = 'Gaussian'
+            if self.distribution == 'Poisson':
+                parse_dict['distribution'] = 'Poisson'
+            if self.distribution == 'Both':
+                parse_dict['distribution'] = 'Both' 
+
+            parse_dict['mean'] = self.mean
+            parse_dict['sigma'] = self.sigma
+                          
+
+        # add multiplicative noise
+        if (self.multiplier is not None):
+                callback_intensity = self._multiplicative_noise
+                parse_dict['multiplier'] = self.multiplier
+                 
+        # random brightness and contrast
+        if (self.brightness_limit is not None) or (self.contrast_limit is not None):
+
+            callback_intensity = self._random_bright_contrast
+
+            parse_dict['brightness_limit'] = self.brightness_limit
+            parse_dict['contrast_limit'] = self.contrast_limit
+            parse_dict['brightness_by_max'] = self.brightness_by_max
+            parse_dict['always_apply'] = self.always_apply
+            parse_dict['prob_bright_contrast'] = self.prob_bright_contrast
+
+
+
+        # build and return augmentor with specified callback function,  the calbacks are eitehr geometic affectging the co ordinates of the 
+        # clicked locations or they are purely intensity based not affecting the csv clicked locations
+        if callback_geometric is not None:
+            return self._return_augmentor(callback_geometric, parse_dict)
+
+        if callback_intensity is not None:
+            return self._return_augmentor_intensity(callback_intensity, parse_dict)
         else:
-            raise ValueError('No generator returned. Arguments are not set properly.')
+            raise ValueError('No augmentor returned. Arguments are not set properly.')
 
-    def _return_generator(self, callback, parse_dict):
-        """return generator according to callback"""
-        self.idx_list = [i for i in range(self.data_size)]
-        np.random.shuffle(self.idx_list)
-        rp_num = self.data_size // self.batch_size
-        cnt = 0
+    def _return_augmentor(self, callback, parse_dict):
+        """return augmented image, label and csv"""
 
-        while True:
-            target_idx = self.idx_list[cnt * self.batch_size: (cnt + 1) * self.batch_size]
-            target_data = self.data[target_idx]
-            target_label = self.label[target_idx]
-
-            # data augmentation by callback function
-            ret_data = [callback(target_data[i], parse_dict) for i in range(self.batch_size)]
-            ret_label =  [callback(target_label[i], parse_dict) for i in range(self.batch_size)]
-         
-            if cnt < rp_num - 1:
-                cnt += 1
-            elif cnt == rp_num - 1:
-                cnt = 0
-                np.random.shuffle(self.idx_list)
-
-                yield ret_data, ret_label
-
-    def _return_generator_poisson(self, callback, parse_dict):
-        """return generator according to callback"""
-        self.idx_list = [i for i in range(self.data_size)]
-        np.random.shuffle(self.idx_list)
-        rp_num = self.data_size // self.batch_size
-        cnt = 0
-
-        while True:
-            target_idx = self.idx_list[cnt * self.batch_size: (cnt + 1) * self.batch_size]
-            target_data = self.data[target_idx]
-            target_label = self.label[target_idx]
-
-            # data augmentation by callback function
-            ret_data = [callback(target_data[i], parse_dict) for i in range(self.batch_size)]
-            ret_label =  [target_label[i] for i in range(self.batch_size)]
-         
-            if cnt < rp_num - 1:
-                cnt += 1
-            elif cnt == rp_num - 1:
-                cnt = 0
-                np.random.shuffle(self.idx_list)
-
-                yield ret_data, ret_label            
-
-
-    def _noise_data(self , data, parse_dict):
-
-            return poisson_noise(data, parse_dict['mu'])
+        target_image = self.image
+        target_labelimage = self.labelimage
         
+        # image and label augmentation by callback function
+        ret_image = callback(target_image,  parse_dict) 
+        ret_labelimage =  callback(target_labelimage, parse_dict) 
 
-    def _flip_data(self, data, parse_dict):
-        """flip array along specified axis(x, y)"""
-        data = np.expand_dims(data,0)
-        return np.flip(data, parse_dict['flip_axis'])
+        return ret_image, ret_labelimage
 
-    def _shift_data(self, data, parse_dict):
-        """shift array by specified range along specified axis(x, y)"""
+    def _return_augmentor_intensity(self, callback, parse_dict):
+        """return augmented image with same label and csv"""
 
-        data = np.expand_dims(data,0)
-        shift_lst = [0] * self.data_dim
-        shift_lst[parse_dict['shift_axis']] = math.floor(
-            parse_dict['shift_range'] * self.data_shape[parse_dict['shift_axis']])
+        target_image = self.image
+        target_labelimage = self.labelimage
 
-        return shift(data, shift=shift_lst, cval=0)[0,...]
-    def _zoom_data(self, data, parse_dict):
-        """zoom array by specified range along specified axis(x, y). After zoomed, the voxel size is the same as
-        before"""
-        # functions to calculate target range of arrays(outside of the target range is not used to zoom)
-        # - d/2 <= zoom_range * (x - d/2) <= d/2
-        f1 = lambda d: math.floor((d / 2) * (1 + 1 / parse_dict['zoom_range']))
-        f2 = lambda d: math.ceil((d / 2) * (1 - 1 / parse_dict['zoom_range']))
-        data_shape = data.shape
-        data = np.expand_dims(data,0)
-        if parse_dict['zoom_range'] > 1.0:
-            # expand
-            z_win1 = list(map(f1, self.data_shape[1:]))
-            z_win2 = list(map(f2, self.data_shape[1:]))
+        # image and label augmentation by callback function
+        ret_image = callback(target_image,  parse_dict) 
+        ret_labelimage =  callback(target_labelimage,  parse_dict) 
 
-            if parse_dict['zoom_axis'] is None:
-                # same for all axis
-                target_data = data[:, z_win2[0]:z_win1[0], z_win2[1]:z_win1[1]]
-            else:
-                # only one axis
-                if parse_dict['zoom_axis'] == 1:
-                    target_data = data[:, z_win2[0]:z_win1[0], :]
-                elif parse_dict['zoom_axis'] == 2:
-                    target_data = data[:, :, z_win2[1]:z_win1[1]]
-        else:
-            # shrink
-            target_data = data
+        return ret_image, ret_labelimage
 
-        if parse_dict['zoom_axis'] is None:
-            zoom_lst = [1] + [parse_dict['zoom_range']] * (self.data_dim - 1)
-        else:
-            zoom_lst = [1] * self.data_dim
-            zoom_lst[parse_dict['zoom_axis']] = parse_dict['zoom_range']
 
-        zoomed = zoom(target_data, zoom=zoom_lst, cval=0)
-        temp = [[math.floor((i - j) / 2), math.ceil((i - j) / 2)] for i, j in zip(self.data_shape[1:], zoomed.shape[1:])]
+    def _horizontal_flip(self, image, parse_dict):
+        """ Flip the image horizontally"""
+        flip_transform = transforms.HorizontalFlip()
+        aug_image = transform_block(image, flip_transform) 
+                            
+        return aug_image
 
-        cast_zoomed = np.zeros(data_shape)
-        cast_zoomed[
-        temp[0][0]:self.data_shape[1] - temp[0][1],
-        temp[1][0]:self.data_shape[2] - temp[1][1]]= zoomed
+    def _vertical_flip(self, image, parse_dict):
+        """ Flip the image vertically"""
+        flip_transform = transforms.VerticalFlip()
+        aug_image = transform_block(image, flip_transform) 
+                            
+        return aug_image
+         
+  
 
-        return cast_zoomed
+    def _elastic_deform_image(self, image, parse_dict):
+        """ Elastically deform the image """
+        alpha = parse_dict['alpha']
+        alpha_affine = parse_dict['alpha_affine']
+        sigma = parse_dict['sigma']
+        elastic_transform = ElasticTransform(alpha = alpha, alpha_affine = alpha_affine, sigma = sigma)
+        aug_image = transform_block(image, elastic_transform) 
+                        
+        return aug_image
 
-    def _rotate_data(self, data, parse_dict):
-        """rotate array by specified range along specified axis(x, y or z)"""
-        if parse_dict['rotate_axis'] == 1:
-            ax_tup = (1, 2)
-        elif parse_dict['rotate_axis'] == 2:
-            ax_tup = (2, 1)
-        else:
-            raise ValueError('rotate axis should be 1, 2')
-        data = np.expand_dims(data,0)
-        return rotate(data, axes=ax_tup, angle=parse_dict['rotate_angle'], cval=0.0, reshape=False)
+    def _multiplicative_noise(self, image, parse_dict):
 
-    def _duplicate_data(self, data, parse_dict):
+        """ Add multiplicative noise using the albumentations library function"""
+        multiplier = parse_dict['multiplier']
+        intensity_transform = transforms.MultiplicativeNoise(multiplier=multiplier)
+        aug_image = transform_block(image, intensity_transform) 
+                        
+        return aug_image    
+    
 
-        size =  parse_dict['size']    
-        return image_pixel_duplicator(data, size)
+    def _random_bright_contrast(self, image, parse_dict):
 
-    def _embed_data(self, data, parse_dict):
+        """ Add random brightness and contrast using the albumentations library function"""
+         
+        brightness_limit = parse_dict['brightness_limit']
+        contrast_limit = parse_dict['contrast_limit']
+        brightness_by_max = parse_dict['brightness_by_max']
+        always_apply = parse_dict['always_apply']
+        prob_bright_contrast = parse_dict['prob_bright_contrast']
+        intensity_transform = transforms.RandomBrightnessContrast(brightness_limit= brightness_limit, 
+            contrast_limit= contrast_limit, brightness_by_max= brightness_by_max, always_apply=always_apply, p= prob_bright_contrast) 
+        aug_image = transform_block(image, intensity_transform)    
 
-        size_zero =  parse_dict['size_zero']    
-        return image_embedding(data, size_zero)    
+
+        return aug_image   
+      
+
+    def _noise_image(self, image, parse_dict):
+          """ Add noise of the chosen distribution or a combination of distributions to all the timepoint of the input image"""
+          mean = parse_dict['mean']
+          sigma = parse_dict['sigma']
+          distribution = parse_dict['distribution']   
+          shape = (image.shape[0], image.shape[1])
+
+          if distribution == 'Gaussian':
+                
+                addednoise = make_noise_image(shape, distribution='gaussian', mean=mean,
+                          stddev=sigma)
+              
+          if distribution == 'Poisson':
+  
+                addednoise = make_noise_image(shape, distribution='poisson', mean=sigma)
+
+          if distribution == 'Both':
+
+                gaussiannoise = make_noise_image(shape, distribution='gaussian', mean=mean,
+                          stddev=sigma)
+                poissonnoise = make_noise_image(shape, distribution='poisson', mean=sigma)
+            
+                addednoise = gaussiannoise + poissonnoise
+
+          else:
+
+            raise ValueError('The distribution is not supported, has to be Gausssian, Poisson or Both (case sensitive names)')      
+          
+          
+          aug_image = image
+          aug_image =  image + addednoise  
+
+          return aug_image
+
+    def _rotate_image(self, image, parse_dict):
+        """rotate array usiong affine transformation and also if the csv file of coordinates is supplied"""
+        rotate_angle = parse_dict['rotate_angle']
+        rotate_matrix =  np.array([[np.cos(rotate_angle), -np.sin(rotate_angle)], [np.sin(rotate_angle), np.cos(rotate_angle)]])
+       
+        aug_image = matrix_transform_block(image, rotate_matrix)
+               
+        return aug_image   
+
+
+    
+def matrix_transform_block(image, matrix):
+        
+        aug_image = image
+        aug_image =  ndimage.affine_transform(image,matrix)  
+
+        return aug_image                 
+
+def transform_block(image, intensity_transform):
+
+        aug_image = image
+        aug_image =  intensity_transform.apply(image)
+
+        return aug_image       
