@@ -296,7 +296,9 @@ class AugmentYX(object):
         """rotate array usiong affine transformation and also if the csv file of coordinates is supplied"""
         rotate_angle = parse_dict['rotate_angle']
        
-        aug_image = rotate(image, rotate_angle)
+        aug_image = rotate(image, rotate_angle, resize = True)
+         
+        aug_image = aug_image + image 
                
         return aug_image   
 
