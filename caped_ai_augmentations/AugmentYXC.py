@@ -113,16 +113,7 @@ class AugmentYXC(object):
         callback_intensity = None
 
 
-        #Vertical flip
-        if (self.vertical_flip is not None):
-            callback_geometric = self._vertical_flip 
-            parse_dict['vertical_flip'] = True
-
-
-        #Horizontal flip
-        if (self.horizontal_flip is not None):
-             callback_geometric = self._horizontal_flip
-             parse_dict['horizontal_flip'] = True
+       
    
 
         # elastic deformation
@@ -211,19 +202,7 @@ class AugmentYXC(object):
         return ret_image, ret_labelimage
 
 
-    def _horizontal_flip(self, image, parse_dict):
-        """ Flip the image horizontally"""
-        flip_transform = transforms.HorizontalFlip()
-        aug_image = transform_block(image, flip_transform) 
-                            
-        return aug_image
-
-    def _vertical_flip(self, image, parse_dict):
-        """ Flip the image vertically"""
-        flip_transform = transforms.VerticalFlip()
-        aug_image = transform_block(image, flip_transform) 
-                            
-        return aug_image
+   
          
   
 
