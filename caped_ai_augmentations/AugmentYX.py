@@ -11,6 +11,7 @@ from albumentations.augmentations.geometric.transforms import ElasticTransform
 from albumentations import transforms    
 from scipy import ndimage
 from photutils.datasets import make_noise_image
+from skimage.transform import rotate
 
 
 class AugmentYX(object):
@@ -280,9 +281,8 @@ class AugmentYX(object):
     def _rotate_image(self, image, parse_dict):
         """rotate array usiong affine transformation and also if the csv file of coordinates is supplied"""
         rotate_angle = parse_dict['rotate_angle']
-        rotate_matrix =  np.array([[np.cos(rotate_angle), -np.sin(rotate_angle)], [np.sin(rotate_angle), np.cos(rotate_angle)]])
        
-        aug_image = matrix_transform_block(image, rotate_matrix)
+        aug_image = rotate(image, rotate_angle)
                
         return aug_image   
 
