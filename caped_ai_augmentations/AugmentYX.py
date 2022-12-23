@@ -114,7 +114,12 @@ class AugmentYX(object):
         callback_intensity = None
 
 
-       
+        #flipud
+        if (self.vertical_flip is not None):
+            callback_geometric = self._flipud_image
+          
+        if (self.horizontal_flip is not None):
+            callback_geometric = self._fliplr_image    
    
 
         # elastic deformation
@@ -129,9 +134,9 @@ class AugmentYX(object):
             callback_geometric = self._rotate_image
 
             if self.rotate_angle == 'random':
-                parse_dict['rotate_angle'] = np.radians(int(np.random.uniform(-180, 180)))
+                parse_dict['rotate_angle'] = int(np.random.uniform(-180, 180))
             elif type(self.rotate_angle) == int:
-                parse_dict['rotate_angle'] = np.radians(self.rotate_angle)
+                parse_dict['rotate_angle'] = self.rotate_angle
             else:
                 raise ValueError('Rotate angle should be int or random')
 
@@ -204,8 +209,17 @@ class AugmentYX(object):
 
 
    
+    def _flipud_image(self, image):
+        
+        aug_image = np.flipud(image)
+        
+        return aug_image 
          
-  
+    def _fliplr_image(self, image):
+        
+        aug_image = np.fliplr(image)
+        
+        return aug_image
 
     def _elastic_deform_image(self, image, parse_dict):
         """ Elastically deform the image """
