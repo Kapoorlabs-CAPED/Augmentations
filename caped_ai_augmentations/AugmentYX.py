@@ -209,13 +209,13 @@ class AugmentYX(object):
 
 
    
-    def _flipud_image(self, image):
+    def _flipud_image(self, image, parse_dict):
         
         aug_image = np.flipud(image)
         
         return aug_image 
          
-    def _fliplr_image(self, image):
+    def _fliplr_image(self, image, parse_dict):
         
         aug_image = np.fliplr(image)
         
