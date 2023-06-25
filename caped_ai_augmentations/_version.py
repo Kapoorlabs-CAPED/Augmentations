@@ -4,4 +4,4 @@ Created on Wed Sep 8 12:18:55 2022
 @author: vkapoor
 """
 
-__version__='1.0.5'
+__version__='1.0.6'

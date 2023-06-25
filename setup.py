@@ -25,7 +25,7 @@ setup(
         "albumentations",
         "scipy",
         "opencv-python",
-        "scikit-learn",
+        "sklearn",
         "dask",
         "natsort",
         "photutils",
