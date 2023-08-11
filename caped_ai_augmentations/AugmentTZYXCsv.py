@@ -12,7 +12,7 @@ from albumentations import transforms
 from scipy import ndimage
 import pandas as pd
 from photutils.datasets import make_noise_image
-from scipy.ndimage import affine_transform
+from scipy.ndimage import affine_transform, rotate
 class AugmentTZYXCsv(object):
 
 
@@ -268,6 +268,7 @@ class AugmentTZYXCsv(object):
         """Rotate ZYX array using an affine transformation and update CSV coordinates."""
         rotate_angle = parse_dict['rotate_angle']
         rotate_angle = np.radians(rotate_angle)
+
         rotate_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle), 0],
                                   [np.sin(rotate_angle), np.cos(rotate_angle), 0],
                                   [0, 0, 1]])
@@ -277,7 +278,7 @@ class AugmentTZYXCsv(object):
         
         for i in range(time_points):
             time_slice = image[i]  # Extract the time slice
-            aug_image[i] = affine_transform(time_slice, rotate_matrix)
+            aug_image[i] = rotate(time_slice, rotate_angle, axes=(1, 2), reshape=False)  # Rotate the time slice
 
         if csv is not None:
             dataset = pd.read_csv(csv)
