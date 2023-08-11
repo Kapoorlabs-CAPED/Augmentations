@@ -170,7 +170,7 @@ class AugmentTZYXCsv(object):
         
         # image and label augmentation by callback function
         ret_image, ret_labelcsv = callback(target_image,  parse_dict, csv = target_labelcsv) 
-        ret_labelimage =  callback(target_labelimage, parse_dict, is_label_image=True) 
+        ret_labelimage =  callback(target_labelimage, parse_dict) 
 
         return ret_image, ret_labelimage, ret_labelcsv
 
@@ -268,7 +268,7 @@ class AugmentTZYXCsv(object):
 
 
 
-    def _rotate_image(self, image, parse_dict, csv=None, is_label_image=False):
+    def _rotate_image(self, image, parse_dict, csv=None):
         """Rotate ZYX array using an affine transformation and update CSV coordinates."""
         rotate_angle = parse_dict['rotate_angle']
 
