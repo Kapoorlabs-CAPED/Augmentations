@@ -253,53 +253,46 @@ class AugmentTZYXCsv(object):
 
 
 
-    def _rotate_image(self, image, parse_dict, csv=None, is_label_image= False):
-
-
-        """Rotate array using an affine transformation and update CSV coordinates."""
+    def _rotate_image(self, image, parse_dict, csv=None, is_label_image=False):
+        """Rotate ZYX array using an affine transformation and update CSV coordinates."""
         rotate_angle = parse_dict['rotate_angle']
-        rotate_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle)],
-                                  [np.sin(rotate_angle), np.cos(rotate_angle)]])
+        rotate_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle), 0],
+                                  [np.sin(rotate_angle), np.cos(rotate_angle), 0],
+                                  [0, 0, 1]])
 
         time_points, z_points, _, _ = image.shape
         aug_image = np.zeros_like(image)  # Initialize the rotated image array
-        if is_label_image:
-            for i in range(time_points):
-              for j in range(z_points):
-                label_image = image[i, j, :, :]
-                label_regions = regionprops(label_image)
-                rotated_regions = []
-
-                # Rotate each label region and collect the rotated regions
-                for region in label_regions:
-                    rotated_label = affine_transform((label_image == region.label).astype(np.float32), rotate_matrix)
-                    rotated_regions.append(rotated_label * region.label)
-                
-                aug_image[i, j, :, :] = np.sum(rotated_regions, axis=0)
-        else:        
-                # Rotate each slice of the image using affine_transform
-                for i in range(time_points):
-                    for j in range(z_points):
-                        aug_image[i, j, :, :] = affine_transform(image[i, j, :, :], rotate_matrix)
+        
+        for i in range(time_points):
+            time_slice = image[i]  # Extract the time slice
+            if is_label_image:
+                rotated_time_slice = np.zeros_like(time_slice)
+                for label in np.unique(time_slice):
+                    if label != 0:  # Ignore background label
+                        label_image = (time_slice == label).astype(np.uint8)
+                        rotated_label_image = affine_transform(label_image, rotate_matrix)
+                        rotated_time_slice[rotated_label_image > 0] = label
+                aug_image[i] = rotated_time_slice
+            else:
+                aug_image[i] = affine_transform(time_slice, rotate_matrix)
 
         if csv is not None:
             dataset = pd.read_csv(csv)
-            time = dataset.iloc[1:, 0].values  # Using .iloc to exclude the header row
+            time = dataset.iloc[1:, 0].values
             z = dataset.iloc[1:, 1].values
             y = dataset.iloc[1:, 2].values
             x = dataset.iloc[1:, 3].values
             
             data = []
             for coord_t, coord_z, coord_y, coord_x in zip(time, z, y, x):
-                rotated_coord_x = coord_x * np.cos(rotate_angle) - coord_y * np.sin(rotate_angle)
-                rotated_coord_y = coord_x * np.sin(rotate_angle) + coord_y * np.cos(rotate_angle)
-                data.append([coord_t, coord_z, rotated_coord_y, rotated_coord_x])
+                rotated_coords = np.dot(rotate_matrix, [coord_x, coord_y, coord_z])
+                data.append([coord_t, rotated_coords[2], rotated_coords[1], rotated_coords[0]])
 
             augmented_csv = pd.DataFrame(data, columns=['T', 'Z', 'Y', 'X'])
             return aug_image, augmented_csv
 
         if csv is None:
-            return aug_image   
+            return aug_image
 
 
     
