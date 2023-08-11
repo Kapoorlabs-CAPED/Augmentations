@@ -11,7 +11,7 @@ import numpy as np
 from albumentations import transforms    
 from scipy import ndimage
 import pandas as pd
-from photutils.datasets import make_noise_image
+from numpy.random import normal, poisson
 from scipy.ndimage import affine_transform
 class AugmentTZYXCsv(object):
 
@@ -223,42 +223,34 @@ class AugmentTZYXCsv(object):
       
 
     def _noise_image(self, image, parse_dict):
-          """ Add noise of the chosen distribution or a combination of distributions to all the timepoint of the input image"""
-          mean = parse_dict['mean']
-          sigma = parse_dict['sigma']
-          distribution = parse_dict['distribution']   
-          shape = (image.shape[2], image.shape[3])
+        """Add noise of the chosen distribution to all timepoints of the input image."""
+        mean = parse_dict['mean']
+        sigma = parse_dict['sigma']
+        distribution = parse_dict['distribution']   
+        shape = (image.shape[2], image.shape[3])
 
-          if distribution == 'Gaussian':
-                
-                addednoise = make_noise_image(shape, distribution='gaussian', mean=mean,
-                          stddev=sigma)
-              
-          if distribution == 'Poisson':
-  
-                addednoise = make_noise_image(shape, distribution='poisson', mean=sigma)
+        if distribution == 'Gaussian':
+            addednoise = normal(loc=mean, scale=sigma, size=shape)
 
-          if distribution == 'Both':
+        elif distribution == 'Poisson':
+            addednoise = poisson(lam=sigma, size=shape)
 
-                gaussiannoise = make_noise_image(shape, distribution='gaussian', mean=mean,
-                          stddev=sigma)
-                poissonnoise = make_noise_image(shape, distribution='poisson', mean=sigma)
-            
-                addednoise = gaussiannoise + poissonnoise
+        elif distribution == 'Both':
+            gaussiannoise = normal(loc=mean, scale=sigma, size=shape)
+            poissonnoise = poisson(lam=sigma, size=shape)
+            addednoise = gaussiannoise + poissonnoise
 
-          else:
+        else:
+            raise ValueError('The distribution is not supported. It has to be Gaussian, Poisson, or Both (case-sensitive names)')      
 
-            raise ValueError('The distribution is not supported, has to be Gausssian, Poisson or Both (case sensitive names)')      
-          
-          
-          aug_image = image
-          time_points = image.shape[0]
-          z_points = image.shape[1]
-          for i in range(time_points):
-            for j in range(z_points):
-               aug_image[i,j,:,:] =  image[i,j,:,:] + addednoise     
+        aug_image = image + addednoise[:, :, np.newaxis, np.newaxis]
 
-          return aug_image
+        return aug_image
+
+
+
+
+
 
     def _rotate_image(self, image, parse_dict, csv=None):
         """Rotate array using an affine transformation and update CSV coordinates."""
