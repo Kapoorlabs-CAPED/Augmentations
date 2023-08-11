@@ -13,6 +13,7 @@ from scipy import ndimage
 import pandas as pd
 from numpy.random import normal, poisson
 from scipy.ndimage import affine_transform
+from skimage.measure import regionprops
 class AugmentTZYXCsv(object):
 
 
@@ -166,7 +167,7 @@ class AugmentTZYXCsv(object):
         
         # image and label augmentation by callback function
         ret_image, ret_labelcsv = callback(target_image,  parse_dict, csv = target_labelcsv) 
-        ret_labelimage =  callback(target_labelimage, parse_dict) 
+        ret_labelimage =  callback(target_labelimage, parse_dict, is_label_image=True) 
 
         return ret_image, ret_labelimage, ret_labelcsv
 
@@ -252,7 +253,9 @@ class AugmentTZYXCsv(object):
 
 
 
-    def _rotate_image(self, image, parse_dict, csv=None):
+    def _rotate_image(self, image, parse_dict, csv=None, is_label_image= False):
+
+
         """Rotate array using an affine transformation and update CSV coordinates."""
         rotate_angle = parse_dict['rotate_angle']
         rotate_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle)],
@@ -260,11 +263,24 @@ class AugmentTZYXCsv(object):
 
         time_points, z_points, _, _ = image.shape
         aug_image = np.zeros_like(image)  # Initialize the rotated image array
-        
-        # Rotate each slice of the image using affine_transform
-        for i in range(time_points):
-            for j in range(z_points):
-                aug_image[i, j, :, :] = affine_transform(image[i, j, :, :], rotate_matrix)
+        if is_label_image:
+            for i in range(time_points):
+              for j in range(z_points):
+                label_image = image[i, j, :, :]
+                label_regions = regionprops(label_image)
+                rotated_regions = []
+
+                # Rotate each label region and collect the rotated regions
+                for region in label_regions:
+                    rotated_label = affine_transform((label_image == region.label).astype(np.float32), rotate_matrix)
+                    rotated_regions.append(rotated_label * region.label)
+                
+                aug_image[i, j, :, :] = np.sum(rotated_regions, axis=0)
+        else:        
+                # Rotate each slice of the image using affine_transform
+                for i in range(time_points):
+                    for j in range(z_points):
+                        aug_image[i, j, :, :] = affine_transform(image[i, j, :, :], rotate_matrix)
 
         if csv is not None:
             dataset = pd.read_csv(csv)
