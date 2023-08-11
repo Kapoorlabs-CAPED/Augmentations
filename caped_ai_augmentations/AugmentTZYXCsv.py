@@ -276,28 +276,19 @@ class AugmentTZYXCsv(object):
         
         for i in range(time_points):
             time_slice = image[i]  # Extract the time slice
-            if is_label_image:
-                rotated_time_slice = np.zeros_like(time_slice)
-                for label in np.unique(time_slice):
-                    if label != 0:  # Ignore background label
-                        label_image = (time_slice == label).astype(np.uint8)
-                        rotated_label_image = affine_transform(label_image, rotate_matrix)
-                        rotated_time_slice[rotated_label_image > 0] = label
-                aug_image[i] = rotated_time_slice
-            else:
-                aug_image[i] = affine_transform(time_slice, rotate_matrix)
+            aug_image[i] = affine_transform(time_slice, rotate_matrix)
 
         if csv is not None:
             dataset = pd.read_csv(csv)
-            time = dataset.iloc[1:, 0].values
-            z = dataset.iloc[1:, 1].values
-            y = dataset.iloc[1:, 2].values
-            x = dataset.iloc[1:, 3].values
+            time = dataset[dataset.keys()[0]]
+            z = dataset[dataset.keys()[1]]
+            y = dataset[dataset.keys()[2]]
+            x = dataset[dataset.keys()[3]]
             
             data = []
             for coord_t, coord_z, coord_y, coord_x in zip(time, z, y, x):
-                rotated_coords = np.dot(rotate_matrix, [coord_x, coord_y, coord_z])
-                data.append([coord_t, rotated_coords[2], rotated_coords[1], rotated_coords[0]])
+                rotated_coords = np.dot(rotate_matrix, [coord_z, coord_y, coord_x])
+                data.append([coord_t, rotated_coords[0], rotated_coords[1], rotated_coords[2]])
 
             augmented_csv = pd.DataFrame(data, columns=['T', 'Z', 'Y', 'X'])
             return aug_image, augmented_csv
