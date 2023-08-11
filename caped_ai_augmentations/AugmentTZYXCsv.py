@@ -24,6 +24,7 @@ class AugmentTZYXCsv(object):
     """
     def __init__(self,
                  rotate_angle=None, 
+                 flip= None,
                  mean = None,
                  sigma = None,
                  distribution = None,
@@ -57,6 +58,7 @@ class AugmentTZYXCsv(object):
         """
        
         self.rotate_angle = rotate_angle
+        self.flip = flip
         self.mean = mean 
         self.sigma = sigma
         self.distribution = distribution
@@ -113,7 +115,9 @@ class AugmentTZYXCsv(object):
                 parse_dict['rotate_angle'] = np.radians(self.rotate_angle)
             else:
                 raise ValueError('Rotate angle should be int or random')
-
+        # flip 
+        if (self.flip is not None):
+            callback_geometric = self._flip_image
         # add additive noise
         if (self.distribution is not None):
 
@@ -296,6 +300,35 @@ class AugmentTZYXCsv(object):
 
         if csv is None:
             return aug_image
+        
+    def _flip_image(self, image, parse_dict, csv=None):
+        time_points, z_points, y_points, x_points = image.shape
+        flipped_image = np.zeros_like(image)  # Initialize the flipped image array
+        
+        for i in range(time_points):
+            time_slice = image[i]  # Extract the time slice
+            flipped_slice = np.flip(time_slice, axis=(1, 2))  # Flip Y and X axes
+            flipped_image[i] = flipped_slice  # Store the flipped time slice
+        
+        if csv is not None:
+            dataset = pd.read_csv(csv)
+            time = dataset[dataset.keys()[0]]
+            z = dataset[dataset.keys()[1]]
+            y = dataset[dataset.keys()[2]]
+            x = dataset[dataset.keys()[3]]
+            
+            data = []
+            for coord_t, coord_z, coord_y, coord_x in zip(time, z, y, x):
+                flipped_coords = [coord_z, y_points - coord_y - 1, x_points - coord_x - 1]
+                data.append([coord_t, flipped_coords[0], flipped_coords[1], flipped_coords[2]])
+
+            flipped_csv = pd.DataFrame(data, columns=['T', 'Z', 'Y', 'X'])
+            return flipped_image, flipped_csv
+
+        if csv is None:
+            return flipped_image
+
+    
 
 
     
