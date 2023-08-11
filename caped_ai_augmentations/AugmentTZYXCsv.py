@@ -267,6 +267,7 @@ class AugmentTZYXCsv(object):
     def _rotate_image(self, image, parse_dict, csv=None, is_label_image=False):
         """Rotate ZYX array using an affine transformation and update CSV coordinates."""
         rotate_angle = parse_dict['rotate_angle']
+        rotate_angle = np.radians(rotate_angle)
         rotate_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle), 0],
                                   [np.sin(rotate_angle), np.cos(rotate_angle), 0],
                                   [0, 0, 1]])
