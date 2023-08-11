@@ -12,6 +12,7 @@ from albumentations import transforms
 from scipy import ndimage
 import pandas as pd
 from photutils.datasets import make_noise_image
+from scipy.ndimage import affine_transform
 class AugmentTZYXCsv(object):
 
 
@@ -259,32 +260,34 @@ class AugmentTZYXCsv(object):
 
           return aug_image
 
-    def _rotate_image(self, image, parse_dict, csv = None):
-        """rotate array usiong affine transformation and also if the csv file of coordinates is supplied"""
+    def _rotate_image(self, image, parse_dict, csv=None):
+        """Rotate array using an affine transformation and update CSV coordinates."""
         rotate_angle = parse_dict['rotate_angle']
-        rotate_matrix =  np.array([[np.cos(rotate_angle), -np.sin(rotate_angle)], [np.sin(rotate_angle), np.cos(rotate_angle)]])
-        time_points = image.shape[0]
-        z_points = image.shape[1]
-        aug_image = image
+        rotate_matrix = np.array([[np.cos(rotate_angle), -np.sin(rotate_angle)],
+                                  [np.sin(rotate_angle), np.cos(rotate_angle)]])
+
+        time_points, z_points, _, _ = image.shape
+        aug_image = np.zeros_like(image)  # Initialize the rotated image array
+        
+        # Rotate each slice of the image using affine_transform
         for i in range(time_points):
             for j in range(z_points):
-             aug_image[i,j,:,:] =  ndimage.affine_transform(image[i,j,:,:],rotate_matrix)
+                aug_image[i, j, :, :] = affine_transform(image[i, j, :, :], rotate_matrix)
+
         if csv is not None:
             dataset = pd.read_csv(csv)
-            time = dataset[dataset.keys()[0]][1:]
-            z = dataset[dataset.keys()[1]][1:]
-            y = dataset[dataset.keys()[2]][1:]
-            x = dataset[dataset.keys()[3]][1:]
+            time = dataset.iloc[1:, 0].values  # Using .iloc to exclude the header row
+            z = dataset.iloc[1:, 1].values
+            y = dataset.iloc[1:, 2].values
+            x = dataset.iloc[1:, 3].values
+            
             data = []
-            for (key, t) in time.items():
-                     coord_x = x[key]
-                     coord_y = y[key]
-                     coord_t = t
-                     coord_z = z[key]
-                     rotated_coord_x =  coord_x * np.cos(rotate_angle) - coord_y * np.sin(rotate_angle)
-                     rotated_coord_y =  coord_x * np.sin(rotate_angle) + coord_y * np.cos(rotate_angle)
-                     data.append([coord_t, coord_z, rotated_coord_y, rotated_coord_x ])
-            augmented_csv = pd.DataFrame(data, columns=['T', 'Z', 'Y', 'X'])         
+            for coord_t, coord_z, coord_y, coord_x in zip(time, z, y, x):
+                rotated_coord_x = coord_x * np.cos(rotate_angle) - coord_y * np.sin(rotate_angle)
+                rotated_coord_y = coord_x * np.sin(rotate_angle) + coord_y * np.cos(rotate_angle)
+                data.append([coord_t, coord_z, rotated_coord_y, rotated_coord_x])
+
+            augmented_csv = pd.DataFrame(data, columns=['T', 'Z', 'Y', 'X'])
             return aug_image, augmented_csv
 
         if csv is None:
