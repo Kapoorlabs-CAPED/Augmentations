@@ -38,6 +38,9 @@ class AugmentYX(object):
                  always_apply=True,
                  prob_bright_contrast=0.5,
                  multiplier= None,
+                 mirror_duplicate = None,
+                 duplicate_size: tuple = (200,200),
+                 blur_radius = None,
                  ):
         """
         Arguments:
@@ -77,6 +80,9 @@ class AugmentYX(object):
         self.always_apply = always_apply
         self.prob_bright_contrast = prob_bright_contrast
         self.multiplier = multiplier
+        self.mirror_duplicate = mirror_duplicate
+        self.duplicate_size = duplicate_size
+        self.blur_radius = blur_radius
     
     def build(self,
               image=None,
@@ -112,7 +118,7 @@ class AugmentYX(object):
         parse_dict = {}
         callback_geometric = None
         callback_intensity = None
-
+        callabck_label = None
 
         #flipud
         if (self.vertical_flip is not None):
@@ -120,7 +126,12 @@ class AugmentYX(object):
           
         if (self.horizontal_flip is not None):
             callback_geometric = self._fliplr_image    
-   
+        if (self.mirror_duplicate is not None):
+            callback_geometric = self._duplicate_image
+            parse_dict['duplicate_size'] = self.duplicate_size
+        if (self.blur_radius is not None):
+            callabck_label = self._blur_image
+            parse_dict['blur_radius'] = self.blur_radius
 
         # elastic deformation
         if (self.alpha_affine is not None):
@@ -177,11 +188,25 @@ class AugmentYX(object):
         # clicked locations or they are purely intensity based not affecting the csv clicked locations
         if callback_geometric is not None:
             return self._return_augmentor(callback_geometric, parse_dict)
-
         if callback_intensity is not None:
             return self._return_augmentor_intensity(callback_intensity, parse_dict)
+        if callabck_label is not None:
+            return self._return_augmentor_label(callabck_label, parse_dict)    
         else:
             raise ValueError('No augmentor returned. Arguments are not set properly.')
+
+    def _return_augmentor_label(self, callback, parse_dict):
+        """return augmented image, label and csv"""
+
+        target_image = self.image
+        target_labelimage = self.labelimage
+        
+        # image and label augmentation by callback function
+        ret_image = target_image
+        ret_labelimage =  callback(target_labelimage, parse_dict) 
+
+        return ret_image, ret_labelimage
+
 
     def _return_augmentor(self, callback, parse_dict):
         """return augmented image, label and csv"""
@@ -203,7 +228,7 @@ class AugmentYX(object):
 
         # image and label augmentation by callback function
         ret_image = callback(target_image,  parse_dict) 
-        ret_labelimage =  callback(target_labelimage,  parse_dict) 
+        ret_labelimage = target_labelimage
 
         return ret_image, ret_labelimage
 
@@ -220,6 +245,34 @@ class AugmentYX(object):
         aug_image = np.fliplr(image)
         
         return aug_image
+    
+    def _duplicate_image(self, image, parse_dict):
+            """ Mirror duplicate the image """
+            duplicate_size = parse_dict['duplicate_size']
+            original_height, original_width = image_array.shape
+            new_width, new_height = original_width + duplicate_size[0], original_height + duplicate_size[1]
+
+            mirrored_x = np.arange(new_width) % (2 * original_width)
+            mirrored_x = np.where(mirrored_x >= original_width, 2 * original_width - 1 - mirrored_x, mirrored_x)
+
+            mirrored_y = np.arange(new_height) % (2 * original_height)
+            mirrored_y = np.where(mirrored_y >= original_height, 2 * original_height - 1 - mirrored_y, mirrored_y)
+
+            grid_y, grid_x = np.meshgrid(mirrored_y, mirrored_x, indexing="ij")
+
+            mirrored_image = image_array[grid_y, grid_x]
+
+            
+            return mirrored_image
+
+    def _blur_image(self, image, parse_dict):        
+        """ Blur the image """
+        blur_radius = parse_dict['blur_radius']
+        
+        aug_image = ndimage.gaussian_filter(image, sigma=blur_radius)
+                        
+        return aug_image
+
 
     def _elastic_deform_image(self, image, parse_dict):
         """ Elastically deform the image """

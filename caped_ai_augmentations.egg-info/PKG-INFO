@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: caped-ai-augmentations
-Version: 1.1.9
+Version: 1.2.0
 Summary: Augmentations for volume, planar segmentation, classification image segmentation and associated csv file of oneat clicks.
 Home-page: https://github.com/Kapoorlabs-CAPED/Augmentations/
 Author: Varun Kapoor
